@@ -24,6 +24,8 @@ import java.io.OutputStream;
 public class SimpleHuffProcessor implements IHuffProcessor {
 
     private IHuffViewer myViewer;
+    private FrequencyCounter counter = new FrequencyCounter();
+
 
     /**
      * Preprocess data so that compression is possible ---
@@ -44,10 +46,30 @@ public class SimpleHuffProcessor implements IHuffProcessor {
      * @throws IOException if an error occurs while reading from the input file.
      */
     public int preprocessCompress(InputStream in, int headerFormat) throws IOException {
-        showString("Not working yet");
-        myViewer.update("Still not working");
-        throw new IOException("preprocess not implemented");
-        //return 0;
+        counter = new FrequencyCounter();
+        counter.countFrequencies(new BitInputStream(in));
+        counter.buildQueue();
+        counter.buildTree();
+        counter.mapChunkToCodes();
+        myViewer.update(counter.frequencies.toString());
+        //original size: count sum of (frequencies * 8)
+        //new size: count sum of (frequencies * string length of new shiz)
+        myViewer.update(counter.chunkCodes.toString());
+        int oldSize = 0;
+        for(Integer key : counter.frequencies.keySet()) {
+            oldSize += (8 * counter.frequencies.get(key));
+        }
+        int newSize = 0;
+        for(Integer key : counter.chunkCodes.keySet()) {
+            newSize += (counter.frequencies.get(key) * counter.chunkCodes.get(key).length());
+        }
+        myViewer.update("Old Size: " + oldSize);
+        myViewer.update("New Size: " + newSize);
+
+//        showString("Not working yet");
+//        myViewer.update("Still not working");
+//        throw new IOException("preprocess not implemented");
+        return 0;
     }
 
     /**

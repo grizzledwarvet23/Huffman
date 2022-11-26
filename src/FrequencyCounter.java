@@ -3,30 +3,35 @@ import java.util.HashMap;
 
 public class FrequencyCounter {
     //frequencies of bit sequences
-    private HashMap<Integer, Integer> frequencies;
-    private PriorityQueue314<TreeNode> queue;
-    private TreeNode root;
+    public HashMap<Integer, Integer> frequencies;
+    public PriorityQueue314<TreeNode> queue;
+    public TreeNode root;
 
     //map the original 8-bit chunk to the code from the path in huffman tree
-    private HashMap<Integer, String> chunkCodes;
+    public HashMap<Integer, String> chunkCodes;
 
 
     public FrequencyCounter() {
         frequencies = new HashMap<>();
         queue = new PriorityQueue314<>();
         root = null;
+        chunkCodes = new HashMap<>();
     }
 
     //step 1
     public void countFrequencies(BitInputStream stream) throws IOException {
         int nextSequence = stream.read();
-        while(nextSequence > -1) {
+        System.out.println("STARTED");
+        while(nextSequence != -1) {
             if(frequencies.get(nextSequence) == null) { //first time
                 frequencies.put(nextSequence, 1);
             } else {
                 frequencies.put(nextSequence, frequencies.get(nextSequence) + 1);
             }
+            nextSequence = stream.read();
         }
+        System.out.println("BOOM");
+
     }
 
     //step 2
