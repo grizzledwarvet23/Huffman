@@ -30,6 +30,8 @@ public class FrequencyCounter {
             }
             nextSequence = stream.read();
         }
+        frequencies.put(256, 1); //The Pseudo-EOF value
+
     }
 
     //step 2
@@ -38,7 +40,6 @@ public class FrequencyCounter {
             queue.enqueue(new TreeNode(key, frequencies.get(key)));
         }
 
-        queue.enqueue(new TreeNode(256, 1)); //The Pseudo-EOF value
     }
 
 
