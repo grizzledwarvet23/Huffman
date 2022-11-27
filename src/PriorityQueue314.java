@@ -12,17 +12,11 @@ public class PriorityQueue314<E extends Comparable<E>> {
     }
 
     public E dequeue() {
-        if (con.isEmpty()) {
-            return null;
-        }
-        return con.remove(0);
+        return con.isEmpty() ? null : con.remove(0);
     }
 
     public E top() {
-        if (con.isEmpty()) {
-            return null;
-        }
-        return con.get(0);
+        return con.isEmpty() ? null : con.get(0);
     }
 
     public int size() {
@@ -36,7 +30,7 @@ public class PriorityQueue314<E extends Comparable<E>> {
             int mid = low + ((high - low) / 2);
             int compVal = con.get(mid).compareTo(target);
             if (compVal == 0) {
-                while(mid < con.size() && con.get(mid).equals(target)) {
+                while(mid < con.size() && (con.get(mid).compareTo(target) == 0)) {
                     mid++;
                 }
                 //one above the last duplicate
@@ -49,5 +43,7 @@ public class PriorityQueue314<E extends Comparable<E>> {
         }
         return low;
     }
+
+
 
 }

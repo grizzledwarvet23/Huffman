@@ -1,9 +1,10 @@
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.TreeMap;
 
 public class FrequencyCounter {
     //frequencies of bit sequences
-    public HashMap<Integer, Integer> frequencies;
+    public TreeMap<Integer, Integer> frequencies;
     public PriorityQueue314<TreeNode> queue;
     public TreeNode root;
 
@@ -12,7 +13,7 @@ public class FrequencyCounter {
 
 
     public FrequencyCounter() {
-        frequencies = new HashMap<>();
+        frequencies = new TreeMap<>();
         queue = new PriorityQueue314<>();
         root = null;
         chunkCodes = new HashMap<>();
@@ -21,7 +22,6 @@ public class FrequencyCounter {
     //step 1
     public void countFrequencies(BitInputStream stream) throws IOException {
         int nextSequence = stream.read();
-        System.out.println("STARTED");
         while(nextSequence != -1) {
             if(frequencies.get(nextSequence) == null) { //first time
                 frequencies.put(nextSequence, 1);
@@ -30,17 +30,18 @@ public class FrequencyCounter {
             }
             nextSequence = stream.read();
         }
-        System.out.println("BOOM");
-
     }
 
     //step 2
     public void buildQueue() {
         for(Integer key : frequencies.keySet()) {
-            TreeNode node = new TreeNode(key, frequencies.get(key));
-            queue.enqueue(node);
+            queue.enqueue(new TreeNode(key, frequencies.get(key)));
         }
+
+        queue.enqueue(new TreeNode(256, 1)); //The Pseudo-EOF value
     }
+
+
 
     //step 3-4
     public void buildTree() {
@@ -70,7 +71,5 @@ public class FrequencyCounter {
             buildCode(n.getRight(), codeSoFar + "1");
         }
     }
-    
-    
 
 }
