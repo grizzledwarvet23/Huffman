@@ -60,14 +60,14 @@ public class SimpleHuffProcessor implements IHuffProcessor {
         myViewer.update(counter.chunkCodes.toString());
 
         int oldSize = 0;
-        for(Integer key : counter.frequencies.keySet()) {
+        for (Integer key : counter.frequencies.keySet()) {
             oldSize += (BITS_PER_WORD * counter.frequencies.get(key));
         }
 
         oldSize -= 8; //PEOF was never included in the uncompressed file
 
         int newSize = 0;
-        for(Integer key : counter.chunkCodes.keySet()) {
+        for (Integer key : counter.chunkCodes.keySet()) {
             newSize += (counter.frequencies.get(key) * counter.chunkCodes.get(key).length());
         }
 
@@ -104,8 +104,23 @@ public class SimpleHuffProcessor implements IHuffProcessor {
      *                     writing to the output file.
      */
     public int compress(InputStream in, OutputStream out, boolean force) throws IOException {
-        throw new IOException("compress is not implemented");
-        //return 0;
+        BitInputStream inBitStream = new BitInputStream(in);
+        BitOutputStream outBitStream = new BitOutputStream(out);
+        // since preprocess has been called, our instance of counter has been constructed for our
+        // desired file
+        int read = inBitStream.read();
+        int numBits = 0;
+        while (read != -1) {
+            String code = counter.chunkCodes.get(read);
+            //write individual bits in the string
+            for (int i = 0; i < code.length(); i++) {
+                outBitStream.write(Integer.parseInt(code.substring(i, i + 1)));
+                numBits++;
+            }
+            read = inBitStream.read(); //move to next chunk
+        }
+        return numBits;
+        // throw new IOException("compress is not implemented");
     }
 
     /**
@@ -119,6 +134,7 @@ public class SimpleHuffProcessor implements IHuffProcessor {
      *                     writing to the output file.
      */
     public int uncompress(InputStream in, OutputStream out) throws IOException {
+
         throw new IOException("uncompress not implemented");
         //return 0;
     }
@@ -160,6 +176,7 @@ public class SimpleHuffProcessor implements IHuffProcessor {
          * that stores the integer value of a particular bit-sequence as a key
          * and maps it to the frequency of how many times it has appeared in the
          * stream.
+         *
          * @param stream The BitInputStream of data to read
          * @throws IOException
          */
@@ -183,7 +200,7 @@ public class SimpleHuffProcessor implements IHuffProcessor {
          * the queue based on the frequency.
          */
         public void buildQueue() {
-            for(Integer key : frequencies.keySet()) {
+            for (Integer key : frequencies.keySet()) {
                 queue.enqueue(new TreeNode(key, frequencies.get(key)));
             }
         }
@@ -196,7 +213,7 @@ public class SimpleHuffProcessor implements IHuffProcessor {
          * This process is repeated until we generate one TreeNode of all Huffman frequencies
          */
         public void buildTree() {
-            while(queue.size() >= 2) {
+            while (queue.size() >= 2) {
                 TreeNode leftChild = queue.dequeue();
                 TreeNode rightChild = queue.dequeue();
                 int newFreq = leftChild.getFrequency() + rightChild.getFrequency();
@@ -226,11 +243,12 @@ public class SimpleHuffProcessor implements IHuffProcessor {
         /**
          * A recursive helper method for mapChunkToCodes.
          * It generates the code as specified under the mapChunkToCodes method.
-         * @param node The current node we are traversing on
+         *
+         * @param node      The current node we are traversing on
          * @param codeSoFar The code we have generated so far for a specific value
          */
         private void buildCode(TreeNode node, String codeSoFar) {
-            if(node.isLeaf()) {
+            if (node.isLeaf()) {
                 chunkCodes.put(node.getValue(), codeSoFar);
                 leaves++;
             } else {
