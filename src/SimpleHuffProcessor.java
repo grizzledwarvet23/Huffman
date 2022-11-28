@@ -105,7 +105,6 @@ public class SimpleHuffProcessor implements IHuffProcessor {
      */
     public int compress(InputStream in, OutputStream out, boolean force) throws IOException {
         BitInputStream inBitStream = new BitInputStream(in);
-        BitOutputStream outBitStream = new BitOutputStream(out);
         // since preprocess has been called, our instance of counter has been constructed for our
         // desired file
         int read = inBitStream.read();
@@ -114,7 +113,7 @@ public class SimpleHuffProcessor implements IHuffProcessor {
             String code = counter.chunkCodes.get(read);
             //write individual bits in the string
             for (int i = 0; i < code.length(); i++) {
-                outBitStream.write(Integer.parseInt(code.substring(i, i + 1)));
+                out.write(Integer.parseInt(code.substring(i, i + 1)));
                 numBits++;
             }
             read = inBitStream.read(); //move to next chunk
@@ -134,7 +133,6 @@ public class SimpleHuffProcessor implements IHuffProcessor {
      *                     writing to the output file.
      */
     public int uncompress(InputStream in, OutputStream out) throws IOException {
-
         throw new IOException("uncompress not implemented");
         //return 0;
     }
