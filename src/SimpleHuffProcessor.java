@@ -28,6 +28,8 @@ public class SimpleHuffProcessor implements IHuffProcessor {
     private IHuffViewer myViewer;
     private HuffmanTree counter;
 
+    private static final int BITS_PER_INT = 32;
+
 
     /**
      * Preprocess data so that compression is possible ---
@@ -133,6 +135,13 @@ public class SimpleHuffProcessor implements IHuffProcessor {
      *                     writing to the output file.
      */
     public int uncompress(InputStream in, OutputStream out) throws IOException {
+        //assuming STF format, get size of tree
+        BitInputStream inStream = new BitInputStream(in);
+        int magicNum = inStream.readBits(BITS_PER_INT); //magic num at beginning
+        //then, length of STF tree
+        int treeLength = inStream.readBits(BITS_PER_INT);
+
+
         throw new IOException("uncompress not implemented");
         //return 0;
     }
