@@ -137,6 +137,7 @@ public class SimpleHuffProcessor implements IHuffProcessor {
      */
     public int uncompress(InputStream in, OutputStream out) throws IOException {
         //assuming STF format, get size of tree
+        BitOutputStream newStream = new BitOutputStream(out);
         BitInputStream inStream = new BitInputStream(in);
         int magicNum = inStream.readBits(BITS_PER_INT); //magic num at beginning
         if (magicNum != MAGIC_NUMBER) {
@@ -154,9 +155,12 @@ public class SimpleHuffProcessor implements IHuffProcessor {
                 huffTree.buildQueue();
                 huffTree.buildTree();
                 treeRoot = huffTree.tree;
+                myViewer.update(huffTree.frequencies.toString());
 
             } else if (headerFormat == STORE_TREE) {
+                inStream.readBits(32);
                 treeRoot = reconstructTree(inStream);
+                System.out.println(treeRoot.getValue());
 
             } else { //put another else if, if STORE_CUSTOM is specified
                 throw new IOException("No valid header found!");
@@ -178,7 +182,7 @@ public class SimpleHuffProcessor implements IHuffProcessor {
                     if (value == PSEUDO_EOF) {
                         reachedEOF = true;
                     } else {
-                        out.write(value);
+                        newStream.writeBits(BITS_PER_WORD + 1, value);
                         bitsWritten += BITS_PER_WORD;
                         temp = treeRoot;
                     }
