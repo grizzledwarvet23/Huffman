@@ -20,6 +20,7 @@
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.sql.SQLOutput;
 import java.util.HashMap;
 import java.util.TreeMap;
 
@@ -141,6 +142,7 @@ public class SimpleHuffProcessor implements IHuffProcessor {
         if (magicNum != MAGIC_NUMBER) {
             throw new IOException("Magic number not found!");
         } else {
+            System.out.println("UNCOMPRESS STARTING");
             int bitsWritten = 0;
             int headerFormat = inStream.readBits(BITS_PER_INT);
             TreeNode treeRoot = null;
@@ -162,23 +164,28 @@ public class SimpleHuffProcessor implements IHuffProcessor {
             //now, we have our tree after deciphering the format
             TreeNode temp = treeRoot;
             boolean reachedEOF = false;
+            int ogBits = 0;
             while (!reachedEOF) {
-                //first, descend a direction
                 if (inStream.readBits(1) == 0) {
+                    ogBits++;
                     temp = temp.getLeft();
                 } else {
-                    temp.getRight();
+                    ogBits++;
+                    temp = temp.getRight();
                 }
                 if (temp.isLeaf()) {
-                    int value = inStream.readBits(BITS_PER_WORD);
+                    int value = inStream.readBits(BITS_PER_WORD + 1);
                     if (value == PSEUDO_EOF) {
                         reachedEOF = true;
                     } else {
                         out.write(value);
                         bitsWritten += BITS_PER_WORD;
+                        temp = treeRoot;
                     }
                 }
             }
+            myViewer.update("Input bits (without header): " + ogBits);
+            myViewer.update("Output bits: " + bitsWritten);
             return bitsWritten;
         }
     }
