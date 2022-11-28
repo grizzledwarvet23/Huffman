@@ -138,12 +138,67 @@ public class SimpleHuffProcessor implements IHuffProcessor {
         //assuming STF format, get size of tree
         BitInputStream inStream = new BitInputStream(in);
         int magicNum = inStream.readBits(BITS_PER_INT); //magic num at beginning
-        //then, length of STF tree
-        int treeLength = inStream.readBits(BITS_PER_INT);
+        if (magicNum != MAGIC_NUMBER) {
+            throw new IOException("Magic number not found!");
+        } else {
+            int bitsWritten = 0;
+            int headerFormat = inStream.readBits(BITS_PER_INT);
+            TreeNode treeRoot = null;
+            if (headerFormat == STORE_COUNTS) {
+                HuffmanTree huffTree = new HuffmanTree();
+                for (int i = 0; i < ALPH_SIZE; i++) {
+                    huffTree.frequencies.put(i, inStream.readBits(BITS_PER_INT));
+                }
+                huffTree.buildQueue();
+                huffTree.buildTree();
+                treeRoot = huffTree.tree;
+
+            } else if (headerFormat == STORE_TREE) {
+                treeRoot = reconstructTree(inStream);
+
+            } else { //put another else if, if STORE_CUSTOM is specified
+                throw new IOException("No valid header found!");
+            }
+            //now, we have our tree after deciphering the format
+            TreeNode temp = treeRoot;
+            boolean reachedEOF = false;
+            while (!reachedEOF) {
+                //first, descend a direction
+                if (inStream.readBits(1) == 0) {
+                    temp = temp.getLeft();
+                } else {
+                    temp.getRight();
+                }
+                if (temp.isLeaf()) {
+                    int value = inStream.readBits(BITS_PER_WORD);
+                    if (value == PSEUDO_EOF) {
+                        reachedEOF = true;
+                    } else {
+                        out.write(value);
+                        bitsWritten += BITS_PER_WORD;
+                    }
+                }
+            }
+            return bitsWritten;
+        }
+    }
+
+    private TreeNode reconstructTree(BitInputStream inStream) throws IOException {
+        int bit = inStream.readBits(1);
+        TreeNode newNode;
+        if (bit == 0) { //internal
+            newNode = new TreeNode(-1, 0); //freq doesnt matter
+            newNode.setLeft(reconstructTree(inStream));
+            newNode.setRight(reconstructTree(inStream));
+            return newNode;
+        } else if (bit == 1) {
+            newNode = new TreeNode(inStream.readBits(BITS_PER_WORD + 1), 0);
+            return newNode;
+        } else {
+            throw new IOException("Error when reading in the huffman tree for STF!");
+        }
 
 
-        throw new IOException("uncompress not implemented");
-        //return 0;
     }
 
     public void setViewer(IHuffViewer viewer) {
@@ -167,6 +222,8 @@ public class SimpleHuffProcessor implements IHuffProcessor {
 
         private int internalNodes; //the total number of internal nodes in the huffman tree
         private int leaves; //the total number of leaves in the huffman tree
+
+        //TODO: group together methods, because implementation details do not matter
 
         /**
          * Constructor for the Huffman Tree
