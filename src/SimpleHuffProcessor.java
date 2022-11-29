@@ -30,8 +30,8 @@ public class SimpleHuffProcessor implements IHuffProcessor {
     private HuffmanTree counter;
 
     private int header;
-
     private int newSize;
+    private int oldSize;
 
     private static final int BITS_PER_INT = 32;
 
@@ -55,6 +55,9 @@ public class SimpleHuffProcessor implements IHuffProcessor {
      * @throws IOException if an error occurs while reading from the input file.
      */
     public int preprocessCompress(InputStream in, int headerFormat) throws IOException {
+        newSize = 0;
+        oldSize = 0;
+
         counter = new HuffmanTree();
         counter.countFrequencies(new BitInputStream(in));
         counter.buildQueue();
@@ -68,7 +71,6 @@ public class SimpleHuffProcessor implements IHuffProcessor {
         //new size: count sum of (frequencies * string length of new shiz)
         myViewer.update(counter.chunkCodes.toString());
 
-        int oldSize = 0;
         for (Integer key : counter.frequencies.keySet()) {
             oldSize += (BITS_PER_WORD * counter.frequencies.get(key));
         }
@@ -90,9 +92,6 @@ public class SimpleHuffProcessor implements IHuffProcessor {
         myViewer.update("Old Size: " + oldSize);
         myViewer.update("New Size: " + newSize);
 
-//        showString("Not working yet");
-//        myViewer.update("Still not working");
-//        throw new IOException("preprocess not implemented");
         return oldSize - newSize;
     }
 
@@ -113,39 +112,46 @@ public class SimpleHuffProcessor implements IHuffProcessor {
      */
     public int compress(InputStream in, OutputStream out, boolean force) throws IOException {
 
-        BitInputStream inBitStream = new BitInputStream(in);
-        BitOutputStream outBitStream = new BitOutputStream(out);
+        if(force || (newSize < oldSize)) {
 
-        //Step 1: Write the magic number
-        outBitStream.writeBits(BITS_PER_INT, MAGIC_NUMBER);
+            System.out.println("Reached");
+            BitInputStream inBitStream = new BitInputStream(in);
+            BitOutputStream outBitStream = new BitOutputStream(out);
 
-        //Step 2: Write the header format
-        outBitStream.writeBits(BITS_PER_INT, header);
+            //Step 1: Write the magic number
+            outBitStream.writeBits(BITS_PER_INT, MAGIC_NUMBER);
 
-        //Step 3: Write the STF header data
-        if(header == STORE_TREE) {
-            outBitStream.writeBits(BITS_PER_INT, counter.internalNodes + (counter.leaves * 10));
-            writeHeaderDataSTF(outBitStream, counter.tree);
-        } else if (header == STORE_COUNTS) {
-            outBitStream.writeBits(BITS_PER_INT, ALPH_SIZE * BITS_PER_INT);
-            writeHeaderDataSCF(outBitStream);
+            //Step 2: Write the header format
+            outBitStream.writeBits(BITS_PER_INT, header);
+
+            //Step 3: Write the STF header data
+            if (header == STORE_TREE) {
+                System.out.println("TREE");
+                outBitStream.writeBits(BITS_PER_INT, counter.internalNodes + (counter.leaves * 10));
+                writeHeaderDataSTF(outBitStream, counter.tree);
+            } else if (header == STORE_COUNTS) {
+//                outBitStream.writeBits(BITS_PER_INT, ALPH_SIZE * BITS_PER_INT);
+                writeHeaderDataSCF(outBitStream);
+            }
+
+            // Step 4: Using the chunk codes, write out the data
+            int read = inBitStream.read();
+            while (read != -1) {
+                //write individual bits in the string
+                convertSequence(counter.chunkCodes.get(read), outBitStream);
+                read = inBitStream.read(); //move to next chunk
+            }
+
+            //Step 5: Add the PEOF value
+            convertSequence(counter.chunkCodes.get(ALPH_SIZE), outBitStream);
+
+            outBitStream.close();
+
+            myViewer.showMessage("Bits of the new file: " + newSize);
+
+            return newSize;
         }
-
-        // Step 4: Using the chunk codes, write out the data
-        int read = inBitStream.read();
-        while (read != -1) {
-            //write individual bits in the string
-            convertSequence(counter.chunkCodes.get(read), outBitStream);
-            read = inBitStream.read(); //move to next chunk
-        }
-
-        //Step 5: Add the PEOF value
-        convertSequence(counter.chunkCodes.get(ALPH_SIZE), outBitStream);
-
-        outBitStream.close();
-
-        myViewer.showMessage("Bits of the new file: " + newSize);
-        return newSize;
+        return 0;
     }
 
     private void writeHeaderDataSTF(BitOutputStream outBitStream, TreeNode node) throws IOException {
@@ -246,7 +252,6 @@ public class SimpleHuffProcessor implements IHuffProcessor {
             }
             newStream.close();
             return bitsWritten;
-
         }
     }
 
@@ -298,6 +303,9 @@ public class SimpleHuffProcessor implements IHuffProcessor {
             queue = new PriorityQueue314<>();
             tree = null;
             chunkCodes = new HashMap<>();
+
+            internalNodes = 0;
+            leaves = 0;
         }
 
         /**
