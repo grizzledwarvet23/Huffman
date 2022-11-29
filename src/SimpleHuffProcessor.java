@@ -142,6 +142,8 @@ public class SimpleHuffProcessor implements IHuffProcessor {
         //Step 5: Add the PEOF value
         convertSequence(counter.chunkCodes.get(ALPH_SIZE), outBitStream);
 
+        outBitStream.close();
+
         myViewer.showMessage("Bits of the new file: " + newSize);
         return newSize;
     }
