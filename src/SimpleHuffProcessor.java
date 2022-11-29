@@ -29,6 +29,10 @@ public class SimpleHuffProcessor implements IHuffProcessor {
     private IHuffViewer myViewer;
     private HuffmanTree counter;
 
+    private int header;
+
+    private int newSize;
+
     private static final int BITS_PER_INT = 32;
 
 
@@ -58,6 +62,8 @@ public class SimpleHuffProcessor implements IHuffProcessor {
         counter.mapChunkToCodes();
         myViewer.update(counter.frequencies.toString());
 
+        header = headerFormat;
+
         //original size: count sum of (frequencies * 8)
         //new size: count sum of (frequencies * string length of new shiz)
         myViewer.update(counter.chunkCodes.toString());
@@ -69,7 +75,6 @@ public class SimpleHuffProcessor implements IHuffProcessor {
 
         oldSize -= 8; //PEOF was never included in the uncompressed file
 
-        int newSize = 0;
         for (Integer key : counter.chunkCodes.keySet()) {
             newSize += (counter.frequencies.get(key) * counter.chunkCodes.get(key).length());
         }
@@ -107,23 +112,69 @@ public class SimpleHuffProcessor implements IHuffProcessor {
      *                     writing to the output file.
      */
     public int compress(InputStream in, OutputStream out, boolean force) throws IOException {
+
         BitInputStream inBitStream = new BitInputStream(in);
-        // since preprocess has been called, our instance of counter has been constructed for our
-        // desired file
+        BitOutputStream outBitStream = new BitOutputStream(out);
+
+        //Step 1: Write the magic number
+        outBitStream.writeBits(BITS_PER_INT, MAGIC_NUMBER);
+
+        //Step 2: Write the header format
+        outBitStream.writeBits(BITS_PER_INT, header);
+
+        //Step 3: Write the STF header data
+        if(header == STORE_TREE) {
+            outBitStream.writeBits(BITS_PER_INT, counter.internalNodes + (counter.leaves * 10));
+            writeHeaderDataSTF(outBitStream, counter.tree);
+        } else if (header == STORE_COUNTS) {
+            outBitStream.writeBits(BITS_PER_INT, ALPH_SIZE * BITS_PER_INT);
+            writeHeaderDataSCF(outBitStream);
+        }
+
+        // Step 4: Using the chunk codes, write out the data
         int read = inBitStream.read();
-        int numBits = 0;
         while (read != -1) {
-            String code = counter.chunkCodes.get(read);
             //write individual bits in the string
-            for (int i = 0; i < code.length(); i++) {
-                out.write(Integer.parseInt(code.substring(i, i + 1)));
-                numBits++;
-            }
+            convertSequence(counter.chunkCodes.get(read), outBitStream);
             read = inBitStream.read(); //move to next chunk
         }
-        return numBits;
-        // throw new IOException("compress is not implemented");
+
+        //Step 5: Add the PEOF value
+        convertSequence(counter.chunkCodes.get(ALPH_SIZE), outBitStream);
+
+        myViewer.showMessage("Bits of the new file: " + newSize);
+        return newSize;
     }
+
+    private void writeHeaderDataSTF(BitOutputStream outBitStream, TreeNode node) throws IOException {
+        if (node.isLeaf()) {
+            outBitStream.writeBits(1, 1);
+            outBitStream.writeBits(BITS_PER_WORD + 1, node.getValue());
+        } else {
+            outBitStream.writeBits(1, 0);
+            writeHeaderDataSTF(outBitStream, node.getLeft());
+            writeHeaderDataSTF(outBitStream, node.getRight());
+        }
+    }
+
+    private void writeHeaderDataSCF(BitOutputStream outBitStream) throws IOException {
+        for (int i = 0; i < IHuffConstants.ALPH_SIZE; i++){
+            int valToAdd;
+            if(counter.frequencies.get(i) == null){
+                valToAdd = 0;
+            } else {
+                valToAdd = counter.frequencies.get(i);
+            }
+            outBitStream.writeBits(BITS_PER_INT,valToAdd);
+        }
+    }
+
+    private void convertSequence(String code, BitOutputStream outBitStream) throws IOException {
+        for (int i = 0; i < code.length(); i++) {
+            outBitStream.writeBits(1, Integer.parseInt(code.substring(i, i + 1)));
+        }
+    }
+
 
     /**
      * Uncompress a previously compressed stream in, writing the
