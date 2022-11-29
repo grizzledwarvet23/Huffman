@@ -152,15 +152,19 @@ public class SimpleHuffProcessor implements IHuffProcessor {
             if (headerFormat == STORE_COUNTS) {
                 HuffmanTree huffTree = new HuffmanTree();
                 for (int i = 0; i < ALPH_SIZE; i++) {
-                    huffTree.frequencies.put(i, inStream.readBits(BITS_PER_INT));
+                    int freq = inStream.readBits(BITS_PER_INT);
+                    if(freq > 0) {
+                        huffTree.frequencies.put(i, freq);
+                    }
                 }
+                huffTree.frequencies.put(PSEUDO_EOF, 1);
                 huffTree.buildQueue();
                 huffTree.buildTree();
                 treeRoot = huffTree.tree;
                 myViewer.update(huffTree.frequencies.toString());
 
             } else if (headerFormat == STORE_TREE) {
-                inStream.readBits(32);
+                inStream.readBits(BITS_PER_INT);
                 treeRoot = reconstructTree(inStream);
                 System.out.println(treeRoot.getValue());
 
@@ -171,9 +175,9 @@ public class SimpleHuffProcessor implements IHuffProcessor {
             TreeNode temp = treeRoot;
             boolean reachedEOF = false;
             int ogBits = 0;
-            System.out.println("EOF" + PSEUDO_EOF);
             while (!reachedEOF) {
-                if (inStream.readBits(1) == 0) {
+                int dir = inStream.readBits(1);
+                if (dir == 0) {
                     ogBits++;
                     temp = temp.getLeft();
                 } else {
@@ -192,8 +196,6 @@ public class SimpleHuffProcessor implements IHuffProcessor {
                     }
                 }
             }
-            myViewer.update("Input bits (without header): " + ogBits);
-            myViewer.update("Output bits: " + bitsWritten);
             return bitsWritten;
         }
     }
@@ -212,8 +214,6 @@ public class SimpleHuffProcessor implements IHuffProcessor {
         } else {
             throw new IOException("Error when reading in the huffman tree for STF!");
         }
-
-
     }
 
     public void setViewer(IHuffViewer viewer) {
@@ -270,7 +270,7 @@ public class SimpleHuffProcessor implements IHuffProcessor {
                 nextSequence = stream.read();
             }
 
-            frequencies.put(256, 1); //The Pseudo-EOF value
+            frequencies.put(PSEUDO_EOF, 1); //The Pseudo-EOF value
         }
 
         /**

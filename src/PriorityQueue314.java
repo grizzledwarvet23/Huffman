@@ -44,6 +44,10 @@ public class PriorityQueue314<E extends Comparable<E>> {
         return low;
     }
 
+    public String toString() {
+        return con.toString();
+    }
+
 
 
 }
