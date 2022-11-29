@@ -244,7 +244,7 @@ public class SimpleHuffProcessor implements IHuffProcessor {
                     if (value == PSEUDO_EOF) {
                         reachedEOF = true;
                     } else {
-                        newStream.writeBits(BITS_PER_WORD + 1, value);
+                        newStream.writeBits(BITS_PER_WORD, value);
                         bitsWritten += BITS_PER_WORD;
                         temp = treeRoot;
                     }
