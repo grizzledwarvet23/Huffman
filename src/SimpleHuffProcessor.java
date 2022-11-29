@@ -196,7 +196,9 @@ public class SimpleHuffProcessor implements IHuffProcessor {
                     }
                 }
             }
+            newStream.close();
             return bitsWritten;
+
         }
     }
 
