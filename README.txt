@@ -125,7 +125,7 @@ compression percentage. However, there is an exception: very small files tend to
 size, rather than compress. This is because header data can cause the compressed file to take more
 space than its actual content, whether it be STF or SCF (to note, however: SCF generally expands
 small files more than STF because of the nature of its header data). We also noticed a strange
-anomoly with an academic paper by scott aaronson: the compression percentage was 1.7%, followed by
+anomoly with an academic paper by Scott Aaronson: the compression percentage was 1.7%, followed by
 a higher data size that compressed over 40%. This may be due to the nature of the pdf file and how
 the tree construction might have not been ideal.
  
