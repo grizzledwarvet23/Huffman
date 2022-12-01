@@ -181,7 +181,7 @@ public class SimpleHuffProcessor implements IHuffProcessor {
     private void displayCompressionMessages() {
         showString("Successful Compressing...");
         showString("The amount of bits written into compressed file " + newSize);
-        int percentCompress = ((newSize - oldSize) / oldSize) * DECIMAL_TO_PERCENT;
+        double percentCompress = ((newSize - oldSize) / oldSize) * DECIMAL_TO_PERCENT;
         showString("The % of compression " + percentCompress);
 
         showString("CODES RESULTING FROM HUFFMAN TREE: ");
