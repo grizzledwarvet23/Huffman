@@ -4,7 +4,7 @@
  *  own work
  *  and WE have not provided this code to any other student.
  *
- *  Number of slip days used:
+ *  Number of slip days used: 0
  *
  *  Student 1 (Student whose Canvas account is being used)
  *  UTEID: zer235
