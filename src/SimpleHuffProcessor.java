@@ -4,7 +4,7 @@
  *  own work
  *  and WE have not provided this code to any other student.
  *
- *  Number of slip days used:
+ *  Number of slip days used: 0
  *
  *  Student 1 (Student whose Canvas account is being used)
  *  UTEID: zer235
@@ -14,7 +14,6 @@
  *  Student 2
  *  UTEID: arm6433
  *  email address: aman.modi1763@gmail.com
- *
  */
 
 import java.io.IOException;
@@ -33,6 +32,8 @@ public class SimpleHuffProcessor implements IHuffProcessor {
     private static final int BIT_FOR_RIGHTDIR = 1;
 
     private final static int BIT_FOR_LEAF = 1;
+
+    private final static int DECIMAL_TO_PERCENT = 100;
 
     private IHuffViewer myViewer;
     private HuffmanTree counter; //Huffman Tree used in encoding
@@ -90,7 +91,7 @@ public class SimpleHuffProcessor implements IHuffProcessor {
         } else if (headerFormat == STORE_TREE) {
             newSize += (counter.leaves * LEAF_SIZE) + counter.internalNodes + BITS_PER_INT;
         } else {
-            myViewer.showError("Invalid Header Format Data type.");
+            throw new IllegalArgumentException("Invalid Header Format Data type.");
         }
 
         displayPreprocessMessages();
@@ -159,7 +160,7 @@ public class SimpleHuffProcessor implements IHuffProcessor {
         } else if (header == STORE_COUNTS) {
             writeHeaderDataSCF(outBitStream);
         } else {
-            myViewer.showError("Invalid Header Format Data type.");
+            throw new IllegalArgumentException("Invalid Header Format Data type.");
         }
 
         // Step 4: Using the chunk codes, write out the data
@@ -180,7 +181,7 @@ public class SimpleHuffProcessor implements IHuffProcessor {
     private void displayCompressionMessages() {
         myViewer.update("Successful Compressing...");
         myViewer.update("The amount of bits written into compressed file " + newSize);
-        int percentCompress = ((newSize - oldSize) / oldSize) * 100;
+        int percentCompress = ((newSize - oldSize) / oldSize) * DECIMAL_TO_PERCENT;
         myViewer.update("The % of compression " + percentCompress);
 
         myViewer.update("CODES RESULTING FROM HUFFMAN TREE: ");
@@ -266,7 +267,9 @@ public class SimpleHuffProcessor implements IHuffProcessor {
 
         int magicNum = inStream.readBits(BITS_PER_INT); //magic num at beginning
         if (magicNum != MAGIC_NUMBER) {
-            myViewer.showError("Error reading compressed file: No PSEUDO_EOF value.");
+            myViewer.showError("Error reading compressed file: Magic number not found!");
+            newStream.close();
+            throw new IOException();
         }
 
         int headerFormat = inStream.readBits(BITS_PER_INT);
@@ -277,12 +280,13 @@ public class SimpleHuffProcessor implements IHuffProcessor {
             treeRoot = constructSTFTree(inStream);
         } else {
             myViewer.showError("Incorrect header format");
+            newStream.close();
+            throw new IOException();
         }
 
         int bitsWritten = (treeRoot == null) ? 0:
                     writeBitsForUncompression(inStream, newStream, treeRoot);
-
-        myViewer.showError("Successful Uncompressing: " + bitsWritten + " bits written.");
+        myViewer.update("Successful Uncompressing: " + bitsWritten + " bits written.");
         return bitsWritten;
     }
 
@@ -369,16 +373,23 @@ public class SimpleHuffProcessor implements IHuffProcessor {
             }
 
         }
-
         newStream.close();
         return bitsWritten;
     }
 
 
+    /**
+     * Sets the myViewer instance to a specified viewer
+     * @param viewer is the view for communicating.
+     */
     public void setViewer(IHuffViewer viewer) {
         myViewer = viewer;
     }
 
+    /**
+     * Shows the string in the myViewer
+     * @param s the input string
+     */
     private void showString(String s){
         if (myViewer != null) {
             myViewer.update(s);

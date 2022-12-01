@@ -4,7 +4,7 @@
  *  own work
  *  and WE have not provided this code to any other student.
  *
- *  Number of slip days used:
+ *  Number of slip days used: 0
  *
  *  Student 1 (Student whose Canvas account is being used)
  *  UTEID: zer235
@@ -12,6 +12,7 @@
  *  Grader name: Pranav Chandupatla
  *
  *  Student 2
+ *  UTEID: arm6433
  *  UTEID: arm6433
  *  email address: aman.modi1763@gmail.com
  *
