@@ -26,8 +26,16 @@ import java.util.TreeMap;
 
 public class SimpleHuffProcessor implements IHuffProcessor {
 
+    private final static int LEAF_SIZE = 10;
+    private final static int BIT_FOR_INTERNAL_NODE = 0;
+
+    private static final int BIT_FOR_LEFTDIR = 0;
+    private static final int BIT_FOR_RIGHTDIR = 1;
+
+    private final static int BIT_FOR_LEAF = 1;
+
     private IHuffViewer myViewer;
-    private HuffmanTree counter;
+    private HuffmanTree counter; //Huffman Tree used in encoding
 
     private int header;
     private int newSize;
@@ -55,28 +63,22 @@ public class SimpleHuffProcessor implements IHuffProcessor {
      * @throws IOException if an error occurs while reading from the input file.
      */
     public int preprocessCompress(InputStream in, int headerFormat) throws IOException {
+        //Initialize
         newSize = 0;
         oldSize = 0;
-
-        counter = new HuffmanTree();
-        counter.countFrequencies(new BitInputStream(in));
-        counter.buildQueue();
-        counter.buildTree();
-        counter.mapChunkToCodes();
-     //   myViewer.update(counter.frequencies.toString());
-
         header = headerFormat;
 
-        //original size: count sum of (frequencies * 8)
-        //new size: count sum of (frequencies * string length of new shiz)
-   //     myViewer.update(counter.chunkCodes.toString());
+        counter = new HuffmanTree();
+        counter.generateHuffmanTree(new BitInputStream(in));
 
+        //Calculate the original size before compression
         for (Integer key : counter.frequencies.keySet()) {
             oldSize += (BITS_PER_WORD * counter.frequencies.get(key));
         }
 
-        oldSize -= 8; //PEOF was never included in the uncompressed file
+        oldSize -= BITS_PER_WORD; //PEOF was never included in the uncompressed file
 
+        //Calculate the new size before compression
         for (Integer key : counter.chunkCodes.keySet()) {
             newSize += (counter.frequencies.get(key) * counter.chunkCodes.get(key).length());
         }
@@ -85,14 +87,25 @@ public class SimpleHuffProcessor implements IHuffProcessor {
         newSize += BITS_PER_INT * 2;
         if (headerFormat == STORE_COUNTS) {
             newSize += (ALPH_SIZE * BITS_PER_INT);
+        } else if (headerFormat == STORE_TREE) {
+            newSize += (counter.leaves * LEAF_SIZE) + counter.internalNodes + BITS_PER_INT;
         } else {
-            newSize += (counter.leaves * 10) + counter.internalNodes + BITS_PER_INT;
+            myViewer.showError("Invalid Header Format Data type.");
         }
 
-   //     myViewer.update("Old Size: " + oldSize);
-   //     myViewer.update("New Size: " + newSize);
+        displayPreprocessMessages();
 
         return oldSize - newSize;
+    }
+
+    /**
+     * Display messages to update the user after preprocess compress
+     */
+    private void displayPreprocessMessages() {
+        myViewer.update("Successful Preprocessing...");
+        myViewer.update("Old Bits of the file, before compression " + oldSize);
+        myViewer.update("New Bits of the file, AFTER compression " + newSize);
+        myViewer.update("The amount of bits saved from compression " + (oldSize - newSize));
     }
 
     /**
@@ -104,72 +117,115 @@ public class SimpleHuffProcessor implements IHuffProcessor {
      * @param in    is the stream being compressed (NOT a BitInputStream)
      * @param out   is bound to a file/stream to which bits are written
      *              for the compressed file (not a BitOutputStream)
-     * @param force if this is true create the output file even if it is larger than the input file.
-     *              If this is false do not create the output file if it is larger than the input file.
+     * @param force if this is true create the output file even if
+     *              it is larger than the input file.
+     *              If this is false do not create the output file if it is larger
+     *              than the input file.
      * @return the number of bits written.
      * @throws IOException if an error occurs while reading from the input file or
      *                     writing to the output file.
      */
     public int compress(InputStream in, OutputStream out, boolean force) throws IOException {
-
-        if(force || (newSize < oldSize)) {
-
-            System.out.println("Reached");
-            BitInputStream inBitStream = new BitInputStream(in);
-            BitOutputStream outBitStream = new BitOutputStream(out);
-
-            //Step 1: Write the magic number
-            outBitStream.writeBits(BITS_PER_INT, MAGIC_NUMBER);
-
-            //Step 2: Write the header format
-            outBitStream.writeBits(BITS_PER_INT, header);
-
-            //Step 3: Write the STF header data
-            if (header == STORE_TREE) {
-                System.out.println("TREE");
-                outBitStream.writeBits(BITS_PER_INT, counter.internalNodes + (counter.leaves * 10));
-                writeHeaderDataSTF(outBitStream, counter.tree);
-            } else if (header == STORE_COUNTS) {
-//                outBitStream.writeBits(BITS_PER_INT, ALPH_SIZE * BITS_PER_INT);
-                writeHeaderDataSCF(outBitStream);
-            }
-
-            // Step 4: Using the chunk codes, write out the data
-            int read = inBitStream.read();
-            while (read != -1) {
-                //write individual bits in the string
-                convertSequence(counter.chunkCodes.get(read), outBitStream);
-                read = inBitStream.read(); //move to next chunk
-            }
-
-            //Step 5: Add the PEOF value
-            convertSequence(counter.chunkCodes.get(ALPH_SIZE), outBitStream);
-
-            outBitStream.close();
-
-        //    myViewer.showMessage("Bits of the new file: " + newSize);
-
-            return newSize;
+        if (force || (newSize < oldSize)) {
+            //Write data into compressed file
+            writeCompressData(new BitInputStream(in), new BitOutputStream(out));
+            displayCompressionMessages();
+        } else {
+            myViewer.showError("Compressed file has " + (newSize - oldSize) + " more bits " +
+                    "than the uncompressed file. Select force compression option to compress.");
         }
-        return 0;
+
+        return (force || (newSize < oldSize)) ? newSize : 0;
     }
 
-    private void writeHeaderDataSTF(BitOutputStream outBitStream, TreeNode node) throws IOException {
+    /**
+     * Write out the compressed data into outBitStream, based on the Huffman Code Tree
+     * @param inBitStream The data to read in from
+     * @param outBitStream The data to write the compressed data from
+     */
+    private void writeCompressData(BitInputStream inBitStream, BitOutputStream outBitStream)
+                                                                throws IOException {
+        //Step 1: Write the magic number
+        outBitStream.writeBits(BITS_PER_INT, MAGIC_NUMBER);
+
+        //Step 2: Write the header format
+        outBitStream.writeBits(BITS_PER_INT, header);
+
+        //Step 3: Write the STF header data
+        if (header == STORE_TREE) {
+            outBitStream.writeBits(BITS_PER_INT, counter.internalNodes +
+                    (counter.leaves * LEAF_SIZE));
+            writeHeaderDataSTF(outBitStream, counter.tree);
+        } else if (header == STORE_COUNTS) {
+            writeHeaderDataSCF(outBitStream);
+        } else {
+            myViewer.showError("Invalid Header Format Data type.");
+        }
+
+        // Step 4: Using the chunk codes, write out the data
+        int read;
+        while ((read = inBitStream.read()) != -1) {
+            //write individual bits in the string
+            convertSequence(counter.chunkCodes.get(read), outBitStream);
+        }
+
+        //Step 5: Add the PEOF value
+        convertSequence(counter.chunkCodes.get(ALPH_SIZE), outBitStream);
+        outBitStream.close();
+    }
+
+    /**
+     * Display messages to update the user after compression process
+     */
+    private void displayCompressionMessages() {
+        myViewer.update("Successful Compressing...");
+        myViewer.update("The amount of bits written into compressed file " + newSize);
+        int percentCompress = ((newSize - oldSize) / oldSize) * 100;
+        myViewer.update("The % of compression " + percentCompress);
+
+        myViewer.update("CODES RESULTING FROM HUFFMAN TREE: ");
+
+        for (Integer key : counter.chunkCodes.keySet()) {
+            myViewer.update(key + " = " + counter.chunkCodes.get(key));
+        }
+    }
+    /**
+     * Write out the header data for the STF compression method
+     * This takes places during compression, while compressing STF files.
+     * This method uses a pre-order traversal method to write out the header data
+     * If the current node is an internal node, write out a 0 and traverse through
+     * the other nodes. Else, if the current node is a lead, write out a 1, and
+     * the value of leaf (in 9 bits).
+     * pre: none
+     * post: The outBitStream now contains header data for STF compression
+     * @param outBitStream The outBitStream to write the data on
+     * @param node The current node we are traversing on
+     */
+    private void writeHeaderDataSTF(BitOutputStream outBitStream, TreeNode node) {
         if (node.isLeaf()) {
-            outBitStream.writeBits(1, 1);
+            outBitStream.writeBits(1, BIT_FOR_LEAF);
             outBitStream.writeBits(BITS_PER_WORD + 1, node.getValue());
         } else {
-            outBitStream.writeBits(1, 0);
+            outBitStream.writeBits(1, BIT_FOR_INTERNAL_NODE);
             writeHeaderDataSTF(outBitStream, node.getLeft());
             writeHeaderDataSTF(outBitStream, node.getRight());
         }
     }
 
-    private void writeHeaderDataSCF(BitOutputStream outBitStream) throws IOException {
+    /**
+     * Writes out the header data for the SCF compression method.
+     * This takes places during compression, while compressing for SCF format.
+     * It loops through all the values for 8 bits and based on the frequency
+     * the value appears on the Huffman Tree, it writes out that many bits.
+     * pre: none
+     * post: The outBitStream now contains header data for SCF compression
+     * @param outBitStream The outBitStream to write the data on
+     */
+    private void writeHeaderDataSCF(BitOutputStream outBitStream) {
         for (int i = 0; i < IHuffConstants.ALPH_SIZE; i++){
             int valToAdd;
             if(counter.frequencies.get(i) == null){
-                valToAdd = 0;
+                valToAdd = 0; //This value doesn't exist in Huffman tree, 0 frequencies
             } else {
                 valToAdd = counter.frequencies.get(i);
             }
@@ -177,7 +233,15 @@ public class SimpleHuffProcessor implements IHuffProcessor {
         }
     }
 
-    private void convertSequence(String code, BitOutputStream outBitStream) throws IOException {
+    /**
+     * Given a code for a particular encoded Huffman value, write out
+     * its bits in the outBitStream.
+     * pre: none, handled by the method calling this method
+     * post: The outBitStream now contains the code from the String code in bits
+     * @param code The code to write on the outBitStream
+     * @param outBitStream The outputStream to write data on
+     */
+    private void convertSequence(String code, BitOutputStream outBitStream) {
         for (int i = 0; i < code.length(); i++) {
             outBitStream.writeBits(1, Integer.parseInt(code.substring(i, i + 1)));
         }
@@ -195,74 +259,50 @@ public class SimpleHuffProcessor implements IHuffProcessor {
      *                     writing to the output file.
      */
     public int uncompress(InputStream in, OutputStream out) throws IOException {
-        //assuming STF format, get size of tree
         BitOutputStream newStream = new BitOutputStream(out);
         BitInputStream inStream = new BitInputStream(in);
+
+        TreeNode treeRoot = null;
+
         int magicNum = inStream.readBits(BITS_PER_INT); //magic num at beginning
         if (magicNum != MAGIC_NUMBER) {
-            throw new IOException("Magic number not found!");
-        } else {
-            int bitsWritten = 0;
-            int headerFormat = inStream.readBits(BITS_PER_INT);
-            TreeNode treeRoot = null;
-            if (headerFormat == STORE_COUNTS) {
-                HuffmanTree huffTree = new HuffmanTree();
-                for (int i = 0; i < ALPH_SIZE; i++) {
-                    int freq = inStream.readBits(BITS_PER_INT);
-                    if(freq > 0) {
-                        huffTree.frequencies.put(i, freq);
-                    }
-                }
-                huffTree.frequencies.put(PSEUDO_EOF, 1);
-                huffTree.buildQueue();
-                huffTree.buildTree();
-                treeRoot = huffTree.tree;
-          //      myViewer.update(huffTree.frequencies.toString());
-            } else if (headerFormat == STORE_TREE) {
-                inStream.readBits(BITS_PER_INT);
-                treeRoot = reconstructTree(inStream);
-
-            } else { //put another else if, if STORE_CUSTOM is specified
-                throw new IOException("No valid header found!");
-            }
-            //now, we have our tree after deciphering the format
-            TreeNode temp = treeRoot;
-            boolean reachedEOF = false;
-            int ogBits = 0;
-            while (!reachedEOF) {
-                int dir = inStream.readBits(1);
-                if (dir == 0) {
-                    ogBits++;
-                    temp = temp.getLeft();
-                } else {
-                    ogBits++;
-                    temp = temp.getRight();
-                }
-                if (temp.isLeaf()) {
-                    int value = temp.getValue();
-                    if (value == PSEUDO_EOF) {
-                        reachedEOF = true;
-                    } else {
-                        newStream.writeBits(BITS_PER_WORD, value);
-                        bitsWritten += BITS_PER_WORD;
-                        temp = treeRoot;
-                    }
-                }
-            }
-            newStream.close();
-            return bitsWritten;
+            myViewer.showError("Error reading compressed file: No PSEUDO_EOF value.");
         }
+
+        int headerFormat = inStream.readBits(BITS_PER_INT);
+        if (headerFormat == STORE_COUNTS) {
+            treeRoot = constructSCFTree(inStream);
+        } else if (headerFormat == STORE_TREE) {
+            inStream.readBits(BITS_PER_INT);
+            treeRoot = constructSTFTree(inStream);
+        } else {
+            myViewer.showError("Incorrect header format");
+        }
+
+        int bitsWritten = (treeRoot == null) ? 0:
+                    writeBitsForUncompression(inStream, newStream, treeRoot);
+
+        myViewer.showError("Successful Uncompressing: " + bitsWritten + " bits written.");
+        return bitsWritten;
     }
 
-    private TreeNode reconstructTree(BitInputStream inStream) throws IOException {
+    /**
+     * During un-compression, the methods takes in a BitInputStream of data
+     * in STF format. Then, based on the values in the stream, it reconstructs
+     * a Huffman tree to later covert the codes to values.
+     * @param inStream The BitInputStream of data
+     * @return TreeNode, symbolizing the Huffman tree generated
+     * @throws IOException
+     */
+    private TreeNode constructSTFTree(BitInputStream inStream) throws IOException {
         int bit = inStream.readBits(1);
         TreeNode newNode;
-        if (bit == 0) { //internal
+        if (bit == BIT_FOR_INTERNAL_NODE) { //internal
             newNode = new TreeNode(-1, 0); //freq doesnt matter
-            newNode.setLeft(reconstructTree(inStream));
-            newNode.setRight(reconstructTree(inStream));
+            newNode.setLeft(constructSTFTree(inStream));
+            newNode.setRight(constructSTFTree(inStream));
             return newNode;
-        } else if (bit == 1) {
+        } else if (bit == BIT_FOR_LEAF) {
             newNode = new TreeNode(inStream.readBits(BITS_PER_WORD + 1), 0);
             return newNode;
         } else {
@@ -270,29 +310,98 @@ public class SimpleHuffProcessor implements IHuffProcessor {
         }
     }
 
+    /**
+     * During un-compression, the methods takes in a BitInputStream of data
+     * in SCF format. Then, while reading the file, every 8 bits symbolizes
+     * the frequency of that particular value (when iterating through Alph_size).
+     * @param inStream The BitInputStream of data
+     * @return TreeNode, symbolizing the Huffman tree generated
+     * @throws IOException
+     */
+    private TreeNode constructSCFTree(BitInputStream inStream) throws IOException {
+        HuffmanTree huffTree = new HuffmanTree();
+        for (int i = 0; i < ALPH_SIZE; i++) {
+            int freq = inStream.readBits(BITS_PER_INT);
+            if(freq > 0) {
+                huffTree.frequencies.put(i, freq);
+            }
+        }
+
+        //Redo the process of generating a Huffman tree through the frequencies
+        huffTree.frequencies.put(PSEUDO_EOF, 1);
+        huffTree.buildQueue();
+        huffTree.buildTree();
+        return huffTree.tree;
+    }
+
+    /**
+     * Based on the tree given, read every chunk code given.
+     * 0 symbolizes moving to the left along the tree and 1 symbolizes the right direction.
+     * When a leaf is hit, this is where the value is stored for the previously given chunk code
+     * Write this value into the newStream
+     * @param inStream The data to read
+     * @param newStream The data to write bits for values of leaf
+     * @param treeRoot The Huffman Tree used to uncompress
+     * @return An integer denoting the number of bits we wrote on to the new file
+     * @throws IOException
+     */
+    private int writeBitsForUncompression(BitInputStream inStream, BitOutputStream
+                                        newStream, TreeNode treeRoot) throws IOException {
+        int bitsWritten = 0;
+        TreeNode temp = treeRoot;
+        boolean reachedEOF = false;
+
+        while (!reachedEOF) {
+            //Move along a particular direction
+            int dir = inStream.readBits(1);
+            temp = (dir == BIT_FOR_LEFTDIR) ? temp.getLeft() : temp.getRight();
+
+            if (temp.isLeaf()) { //If we hit a leaf
+                int value = temp.getValue();
+                if (value == PSEUDO_EOF) {
+                    reachedEOF = true; //We are done reading the file,
+                    //terminate the loop
+                } else { //This is the data, now write this
+                    newStream.writeBits(BITS_PER_WORD, value);
+                    bitsWritten += BITS_PER_WORD;
+                    temp = treeRoot; //Restore back to start to decipher other codes
+                }
+            }
+
+        }
+
+        newStream.close();
+        return bitsWritten;
+    }
+
+
     public void setViewer(IHuffViewer viewer) {
         myViewer = viewer;
     }
 
-    private void showString(String s) {
+    private void showString(String s){
         if (myViewer != null) {
             myViewer.update(s);
         }
     }
 
-    private static class HuffmanTree {
-        private TreeMap<Integer, Integer> frequencies; //frequencies of bit sequences
 
-        private PriorityQueue314<TreeNode> queue; //A PQ that is used to develop HuffmanTree
-        private TreeNode tree; //The final huffmanTree
+    /**
+     * A nested static class that develops a Huffman Tree and encodes
+     * codes for values fed.
+     */
+    private static class HuffmanTree {
+
+        private final TreeMap<Integer, Integer> frequencies; //frequencies of bit sequences
+
+        private final PriorityQueue314<TreeNode> queue; //A PQ that is used to develop HuffmanTree
+        private TreeNode tree;
 
         //map the original 8-bit chunk to the code from the path in huffman tree
-        private HashMap<Integer, String> chunkCodes;
+        private final HashMap<Integer, String> chunkCodes;
 
-        private int internalNodes; //the total number of internal nodes in the huffman tree
-        private int leaves; //the total number of leaves in the huffman tree
-
-        //TODO: group together methods, because implementation details do not matter
+        private int internalNodes;
+        private int leaves;
 
         /**
          * Constructor for the Huffman Tree
@@ -308,6 +417,26 @@ public class SimpleHuffProcessor implements IHuffProcessor {
         }
 
         /**
+         * Generates the Huffman encoded chunk values based on the input stream
+         * @param stream The BitInputStream, the data to compress and generate
+         *               chunk values for
+         * pre: stream != null
+         * post: Generates the chunk codes and creates the Huffman Encode tree
+         * @throws IOException
+         */
+        public void generateHuffmanTree(BitInputStream stream) throws IOException {
+            if (stream == null) {
+                throw new IllegalArgumentException("You cannot pass in a null " +
+                        "stream of data to read");
+            }
+
+            countFrequencies(stream);
+            buildQueue();
+            buildTree();
+            mapChunkToCodes();
+        }
+
+        /**
          * Based on the BitInputStream of data, develop a TreeMap of frequencies
          * that stores the integer value of a particular bit-sequence as a key
          * and maps it to the frequency of how many times it has appeared in the
@@ -316,7 +445,7 @@ public class SimpleHuffProcessor implements IHuffProcessor {
          * @param stream The BitInputStream of data to read
          * @throws IOException
          */
-        public void countFrequencies(BitInputStream stream) throws IOException {
+        private void countFrequencies(BitInputStream stream) throws IOException {
             int nextSequence = stream.read();
             while (nextSequence != -1) {
                 if (frequencies.get(nextSequence) == null) { //first time
@@ -330,12 +459,13 @@ public class SimpleHuffProcessor implements IHuffProcessor {
             frequencies.put(PSEUDO_EOF, 1); //The Pseudo-EOF value
         }
 
+
         /**
          * Generate a PriorityQueue that first creates a TreeNode for
          * every sequence-frequency pairing. Then, it queues them and prioritizes
          * the queue based on the frequency.
          */
-        public void buildQueue() {
+        private void buildQueue() {
             for (Integer key : frequencies.keySet()) {
                 queue.enqueue(new TreeNode(key, frequencies.get(key)));
             }
@@ -348,7 +478,7 @@ public class SimpleHuffProcessor implements IHuffProcessor {
          * frequencies of the dequeued nodes.
          * This process is repeated until we generate one TreeNode of all Huffman frequencies
          */
-        public void buildTree() {
+        private void buildTree() {
             while (queue.size() >= 2) {
                 TreeNode leftChild = queue.dequeue();
                 TreeNode rightChild = queue.dequeue();
@@ -372,7 +502,7 @@ public class SimpleHuffProcessor implements IHuffProcessor {
          * 0 means we traversed along the left of the tree and 1 means to the right.
          * This is done until we hit a leaf, which indicates a character.
          */
-        public void mapChunkToCodes() {
+        private void mapChunkToCodes() {
             buildCode(tree, "");
         }
 
@@ -388,8 +518,8 @@ public class SimpleHuffProcessor implements IHuffProcessor {
                 chunkCodes.put(node.getValue(), codeSoFar);
                 leaves++;
             } else {
-                buildCode(node.getLeft(), codeSoFar + "0");
-                buildCode(node.getRight(), codeSoFar + "1");
+                buildCode(node.getLeft(), codeSoFar + (BIT_FOR_LEFTDIR + ""));
+                buildCode(node.getRight(), codeSoFar + (BIT_FOR_RIGHTDIR + ""));
                 internalNodes++;
             }
         }
