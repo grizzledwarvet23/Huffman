@@ -103,10 +103,10 @@ public class SimpleHuffProcessor implements IHuffProcessor {
      * Display messages to update the user after preprocess compress
      */
     private void displayPreprocessMessages() {
-        myViewer.update("Successful Preprocessing...");
-        myViewer.update("Old Bits of the file, before compression " + oldSize);
-        myViewer.update("New Bits of the file, AFTER compression " + newSize);
-        myViewer.update("The amount of bits saved from compression " + (oldSize - newSize));
+        showString("Successful Preprocessing...");
+        showString("Old Bits of the file, before compression " + oldSize);
+        showString("New Bits of the file, AFTER compression " + newSize);
+        showString("The amount of bits saved from compression " + (oldSize - newSize));
     }
 
     /**
@@ -132,7 +132,7 @@ public class SimpleHuffProcessor implements IHuffProcessor {
             writeCompressData(new BitInputStream(in), new BitOutputStream(out));
             displayCompressionMessages();
         } else {
-            myViewer.showError("Compressed file has " + (newSize - oldSize) + " more bits " +
+            showError("Compressed file has " + (newSize - oldSize) + " more bits " +
                     "than the uncompressed file. Select force compression option to compress.");
         }
 
@@ -179,15 +179,15 @@ public class SimpleHuffProcessor implements IHuffProcessor {
      * Display messages to update the user after compression process
      */
     private void displayCompressionMessages() {
-        myViewer.update("Successful Compressing...");
-        myViewer.update("The amount of bits written into compressed file " + newSize);
+        showString("Successful Compressing...");
+        showString("The amount of bits written into compressed file " + newSize);
         int percentCompress = ((newSize - oldSize) / oldSize) * DECIMAL_TO_PERCENT;
-        myViewer.update("The % of compression " + percentCompress);
+        showString("The % of compression " + percentCompress);
 
-        myViewer.update("CODES RESULTING FROM HUFFMAN TREE: ");
+        showString("CODES RESULTING FROM HUFFMAN TREE: ");
 
         for (Integer key : counter.chunkCodes.keySet()) {
-            myViewer.update(key + " = " + counter.chunkCodes.get(key));
+            showString(key + " = " + counter.chunkCodes.get(key));
         }
     }
     /**
@@ -267,7 +267,7 @@ public class SimpleHuffProcessor implements IHuffProcessor {
 
         int magicNum = inStream.readBits(BITS_PER_INT); //magic num at beginning
         if (magicNum != MAGIC_NUMBER) {
-            myViewer.showError("Error reading compressed file: Magic number not found!");
+            showError("Error reading compressed file: Magic number not found!");
             newStream.close();
             throw new IOException();
         }
@@ -279,14 +279,14 @@ public class SimpleHuffProcessor implements IHuffProcessor {
             inStream.readBits(BITS_PER_INT);
             treeRoot = constructSTFTree(inStream);
         } else {
-            myViewer.showError("Incorrect header format");
+            showError("Incorrect header format");
             newStream.close();
             throw new IOException();
         }
 
         int bitsWritten = (treeRoot == null) ? 0:
                     writeBitsForUncompression(inStream, newStream, treeRoot);
-        myViewer.update("Successful Uncompressing: " + bitsWritten + " bits written.");
+        showString("Successful Uncompressing: " + bitsWritten + " bits written.");
         return bitsWritten;
     }
 
@@ -393,6 +393,16 @@ public class SimpleHuffProcessor implements IHuffProcessor {
     private void showString(String s){
         if (myViewer != null) {
             myViewer.update(s);
+        }
+    }
+
+    /**
+     * Shows an error message window with the specified string message
+     * @param s the input string to show in the error box
+     */
+    private void showError(String s) {
+        if(myViewer != null) {
+            myViewer.showError(s);
         }
     }
 
